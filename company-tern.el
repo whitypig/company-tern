@@ -4,6 +4,7 @@
 
 ;; Author: Artem Malyshev <proofit404@gmail.com>
 ;; URL: https://github.com/proofit404/company-tern
+;; Package-Version: 20161004.1147
 ;; Version: 0.3.0
 ;; Package-Requires: ((company "0.8.0") (tern "0.0.1") (dash "2.8.0") (dash-functional "2.8.0") (s "1.9.0") (cl-lib "0.5.0"))
 
@@ -49,6 +50,9 @@ This also can be nil to disable property markers."
   "Trim candidate type information to frame width?"
   :type 'boolean
   :group 'company-tern)
+
+(defvar company-tern--debug-print-enabled nil
+  "Non-nil enables debug print.")
 
 (defun company-tern-prefix ()
   "Grab prefix for tern."
@@ -165,6 +169,111 @@ See `company-backends' for more info about COMMAND and ARG."
     (candidates (cons :async
                       (lambda (callback)
                         (company-tern-candidates-query arg callback))))))
+
+(defun company-tern---split-string-by-toplevel-comma (s)
+  "Split string S by toplevel SEPARATORS.
+
+Examples:
+\"a, g(x, y), b\" => (\"a\" \"g(x, y)\" \"b\")
+"
+  (cl-loop for ch in (split-string s "" t)
+           with depth = 0
+           with acc = nil
+           with ret = nil
+           with separator = "[,]"
+           do (cond
+               ((string-match-p separator ch)
+                (cond
+                 ((zerop depth)
+                  (when acc (push (cl-reduce #'concat (nreverse acc)) ret))
+                  (setq acc nil))
+                 ((> depth 0)
+                  (push ch acc))))
+               ((string-match-p "[(]" ch)
+                (incf depth)
+                (push ch acc))
+               ((string-match-p "[)]" ch)
+                (decf depth)
+                (push ch acc))
+               (t
+                (push ch acc)))
+           finally (progn
+                     (when acc
+                       (push (cl-reduce #'concat (nreverse acc)) ret))
+                     (return (mapcar #'s-trim (nreverse ret))))))
+
+(cl-defun company-tern--debug-print (format-string &rest args &key (force nil) &allow-other-keys)
+  ;; We do not need keyword argument because we bother to manually
+  ;; parse args to find out whether FORCE is speficed or not. However,
+  ;; to indicate that you can pass `:force' to force debug print, we
+  ;; put it in the argument list, which ends up in forcing us to put
+  ;; `allow-other-keys' keyword in the argument list, OR I just do not
+  ;; know another way to implement the same functionality.
+  (let* ((pos (cl-position :force args))
+         (force (and pos (< (1+ pos) (length args)) (nth (1+ pos) args)))
+         (args (and pos (append (cl-subseq args 0 pos) (cl-subseq args (+ pos 2))))))
+    (when (or company-tern--debug-print-enabled force)
+      (message "[company-tern]: %s" (apply #'format format-string args)))))
+
+(defun company-tern--expand-snippet (candidate)
+  "Construct a template for yasnippet from CANDIDATE and expand it."
+  (ignore-errors
+    (let* ((type (get-text-property 0 'type candidate))
+           (template nil)
+           (ix 0))
+      (company-tern--debug-print "type=%s" type)
+      (cond
+       ((string-match "^fn(\\(.*\\))" type)
+        (setq template
+              (concat
+               "("
+               (cl-reduce
+                (lambda (a b)
+                  (concat a
+                          (if (string-match-p "[0-9A-Za-z_]\\?:" b)
+                              ;; this argument is optional, so we make the
+                              ;; separator itself, (which is ", "), a field in
+                              ;; template.  In this way, we can skip the rest of
+                              ;; arguments with "C-d" when we do not need those
+                              ;; optional arguments.
+                              (concat (if (zerop ix)
+                                          ""
+                                        (format "${%d:, }" (incf ix)))
+                                      (format "${%d:%s}" (incf ix) b))
+                            (format "%s${%d:%s}"
+                                    (if (> (length a) 0) ", " "")
+                                    (incf ix) b))))
+                (company-tern---split-string-by-toplevel-comma
+                 (match-string-no-properties 1 type))
+                :initial-value "")
+               ")$0"))
+        (company-tern--debug-print "template=%s" template)
+        (yas-expand-snippet template))
+       (t
+        nil)))))
+
+;;;###autoload
+(defun company-tern-with-yasnippet (command &optional arg &rest _args)
+  "Another tern backend for company-mode. This backend assumes that
+you have yasnippet installed and available on your environment.
+
+On inserting a candidate having a signiture, such as functions, its
+arguments will be inserted and expanded using yasnippet.
+
+See `company-backends' for more info about COMMAND and ARG."
+  (interactive (list 'interactive))
+  (cl-case command
+    (interactive (company-begin-backend 'company-tern))
+    (prefix (company-tern-prefix))
+    (annotation (company-tern-annotation arg))
+    (meta (company-tern-meta arg))
+    (doc-buffer (company-tern-doc arg))
+    (ignore-case t)
+    (sorted t)
+    (candidates (cons :async
+                      (lambda (callback)
+                        (company-tern-candidates-query arg callback))))
+    (post-completion (company-tern--expand-snippet arg))))
 
 (provide 'company-tern)
 
