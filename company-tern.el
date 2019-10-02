@@ -211,7 +211,8 @@ Examples:
   ;; know another way to implement the same functionality.
   (let* ((pos (cl-position :force args))
          (force (and pos (< (1+ pos) (length args)) (nth (1+ pos) args)))
-         (args (and pos (append (cl-subseq args 0 pos) (cl-subseq args (+ pos 2))))))
+         (args (or (and pos (append (cl-subseq args 0 pos) (cl-subseq args (+ pos 2))))
+                   args)))
     (when (or company-tern--debug-print-enabled force)
       (message "[company-tern]: %s" (apply #'format format-string args)))))
 
