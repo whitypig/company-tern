@@ -54,10 +54,53 @@ This also can be nil to disable property markers."
 (defvar company-tern--debug-print-enabled nil
   "Non-nil enables debug print.")
 
+(defun company-tern-in-string-or-comment ()
+  "Return non-nil if point is inside a string or comment."
+  (let* ((lst (parse-partial-sexp (point-min) (point)))
+         ;; start of comment or string
+         (pos (nth 8 lst))
+         (ch (and pos (char-after pos))))
+    (cond
+     ((nth 4 lst)
+      ;; We are inside comment.
+      t)
+     ((null (nth 3 lst))
+      ;; We are outside a string.
+      nil)
+     ;; Now, we are inside a string.
+     ((and pos (not (char-equal ch ?`)))
+      ;; " or '
+      t)
+     ((and pos
+           (char-equal ch ?`)
+           (company-tern--inside-template-p
+            (buffer-substring-no-properties (1+ pos) (point))))
+      ;; Looks like we have "`...${" in fron of us.
+      nil)
+     (t
+      t))))
+
+(defun company-tern--inside-template-p (string)
+  "Return non-nil if point is likely to be in template string."
+  (cond
+   ((not (string-match "${\\(.*\\)\\'" string))
+    nil)
+   (t
+    ;; "`[...${......]"
+    ;;         ^^^^^^
+    ;;         If this portion contains unbalanced "\"" or "'", we
+    ;;         assume we are in a template.
+    (let* ((s (match-string-no-properties 1 string))
+           (lst (split-string s "" t))
+           (double-quote-cnt (cl-count "\"" lst :test #'string=))
+           (single-quote-cnt (cl-count "'" lst :test #'string=)))
+      (and (cl-evenp double-quote-cnt)
+           (cl-evenp single-quote-cnt))))))
+
 (defun company-tern-prefix ()
   "Grab prefix for tern."
   (and tern-mode
-       (not (company-in-string-or-comment))
+       (not (company-tern-in-string-or-comment))
        (or (company-grab-symbol-cons "\\." 1)
            'stop)))
 
