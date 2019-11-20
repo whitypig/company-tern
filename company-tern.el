@@ -170,6 +170,7 @@ See `company-backends' for more info about COMMAND and ARG."
                       (lambda (callback)
                         (company-tern-candidates-query arg callback))))))
 
+;; fn(glob: store, opt: store) -> DestroyableTransform|fn(override: ?) -> Through2
 (defun company-tern---split-string-by-toplevel-comma (s)
   "Split string S by toplevel SEPARATORS.
 
@@ -202,6 +203,7 @@ Examples:
                        (push (cl-reduce #'concat (nreverse acc)) ret))
                      (return (mapcar #'s-trim (nreverse ret))))))
 
+;; gulp.src(glob: store, opt: store -> DestroyableTransform|fn(override: ?})
 (cl-defun company-tern--debug-print (format-string &rest args &key (force nil) &allow-other-keys)
   ;; We do not need keyword argument because we bother to manually
   ;; parse args to find out whether FORCE is speficed or not. However,
@@ -211,8 +213,7 @@ Examples:
   ;; know another way to implement the same functionality.
   (let* ((pos (cl-position :force args))
          (force (and pos (< (1+ pos) (length args)) (nth (1+ pos) args)))
-         (args (or (and pos (append (cl-subseq args 0 pos) (cl-subseq args (+ pos 2))))
-                   args)))
+         (args (if pos (append (cl-subseq args 0 pos) (cl-subseq args (+ pos 2))) args)))
     (when (or company-tern--debug-print-enabled force)
       (message "[company-tern]: %s" (apply #'format format-string args)))))
 
@@ -245,13 +246,26 @@ Examples:
                                     (if (> (length a) 0) ", " "")
                                     (incf ix) b))))
                 (company-tern---split-string-by-toplevel-comma
-                 (match-string-no-properties 1 type))
+                 (company-tern--extract-arguments type))
                 :initial-value "")
                ")$0"))
         (company-tern--debug-print "template=%s" template)
         (yas-expand-snippet template))
        (t
         nil)))))
+
+;; fn(glob: store, opt: store) -> DestroyableTransform|fn(override: ?) -> Through2
+;; => glob: store, opt: store
+(defun company-tern--extract-arguments (type)
+  (let ((beg nil))
+    (with-temp-buffer
+      (insert type)
+      (goto-char (point-min))
+      (cl-assert (search-forward "("))
+      (backward-char 1)
+      (setq beg (1+ (point)))
+      ;; We are on the open paren.
+      (buffer-substring beg (1- (scan-lists (point) 1 0))))))
 
 ;;;###autoload
 (defun company-tern-with-yasnippet (command &optional arg &rest _args)
