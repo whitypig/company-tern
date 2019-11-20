@@ -170,6 +170,7 @@ See `company-backends' for more info about COMMAND and ARG."
                       (lambda (callback)
                         (company-tern-candidates-query arg callback))))))
 
+;; fn(glob: store, opt: store) -> DestroyableTransform|fn(override: ?) -> Through2
 (defun company-tern---split-string-by-toplevel-comma (s)
   "Split string S by toplevel SEPARATORS.
 
@@ -245,13 +246,26 @@ Examples:
                                     (if (> (length a) 0) ", " "")
                                     (incf ix) b))))
                 (company-tern---split-string-by-toplevel-comma
-                 (match-string-no-properties 1 type))
+                 (company-tern--extract-arguments type))
                 :initial-value "")
                ")$0"))
         (company-tern--debug-print "template=%s" template)
         (yas-expand-snippet template))
        (t
         nil)))))
+
+;; fn(glob: store, opt: store) -> DestroyableTransform|fn(override: ?) -> Through2
+;; => glob: store, opt: store
+(defun company-tern--extract-arguments (type)
+  (let ((beg nil))
+    (with-temp-buffer
+      (insert type)
+      (goto-char (point-min))
+      (cl-assert (search-forward "("))
+      (backward-char 1)
+      (setq beg (1+ (point)))
+      ;; We are on the open paren.
+      (buffer-substring beg (1- (scan-lists (point) 1 0))))))
 
 ;;;###autoload
 (defun company-tern-with-yasnippet (command &optional arg &rest _args)
