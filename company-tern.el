@@ -88,8 +88,10 @@ This also can be nil to disable property markers."
    (t
     ;; "`[...${......]"
     ;;         ^^^^^^
-    ;;         If this portion contains unbalanced "\"" or "'", we
-    ;;         assume we are in a template.
+    ;;         If this portion contains unbalanced "\"" or "'", this
+    ;;         means that we are in a string. Otherwise, we assume we
+    ;;         are in a template. Note that we do not consider cases
+    ;;         where those quotation characters are escaped.
     (let* ((s (match-string-no-properties 1 string))
            (lst (split-string s "" t))
            (double-quote-cnt (cl-count "\"" lst :test #'string=))
