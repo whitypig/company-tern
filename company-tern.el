@@ -54,9 +54,9 @@ This also can be nil to disable property markers."
 (defvar company-tern--debug-print-enabled nil
   "Non-nil enables debug print.")
 
-(defun company-tern-in-string-or-comment ()
+(defun company-tern-in-string-or-comment-p ()
   "Return non-nil if point is inside a string or comment."
-  (let* ((lst (parse-partial-sexp (point-min) (point)))
+  (let* ((lst (syntax-ppss))
          ;; start of comment or string
          (pos (nth 8 lst))
          (ch (and pos (char-after pos))))
@@ -93,16 +93,16 @@ This also can be nil to disable property markers."
     ;;         are in a template. Note that we do not consider cases
     ;;         where those quotation characters are escaped.
     (let* ((s (match-string-no-properties 1 string))
-           (lst (split-string s "" t))
-           (double-quote-cnt (cl-count "\"" lst :test #'string=))
-           (single-quote-cnt (cl-count "'" lst :test #'string=)))
+           (lst (append s nil))
+           (double-quote-cnt (cl-count ?\" lst))
+           (single-quote-cnt (cl-count ?' lst)))
       (and (cl-evenp double-quote-cnt)
            (cl-evenp single-quote-cnt))))))
 
 (defun company-tern-prefix ()
   "Grab prefix for tern."
   (and tern-mode
-       (not (company-tern-in-string-or-comment))
+       (not (company-tern-in-string-or-comment-p))
        (or (company-grab-symbol-cons "\\." 1)
            'stop)))
 
