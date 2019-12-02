@@ -51,6 +51,16 @@ This also can be nil to disable property markers."
   :type 'boolean
   :group 'company-tern)
 
+(defcustom company-tern-post-completion-function #'company-tern-expand-yasnippet
+  "Function to be called on selection of a candidate.  Function must
+accept one argument, which is a selected candidate.
+
+To disable post-completion, set this to #'ignore like the following:
+
+(setq company-tern-post-completion-function #'ignore)"
+  :type '(function)
+  :group 'company-tern)
+
 (defvar company-tern--debug-print-enabled nil
   "Non-nil enables debug print.")
 
@@ -198,23 +208,6 @@ Use CALLBACK function to display candidates."
                (annot (if company-tooltip-align-annotations "%s" " -> %s")))
     (format annot type)))
 
-;;;###autoload
-(defun company-tern (command &optional arg &rest _args)
-  "Tern backend for company-mode.
-See `company-backends' for more info about COMMAND and ARG."
-  (interactive (list 'interactive))
-  (cl-case command
-    (interactive (company-begin-backend 'company-tern))
-    (prefix (company-tern-prefix))
-    (annotation (company-tern-annotation arg))
-    (meta (company-tern-meta arg))
-    (doc-buffer (company-tern-doc arg))
-    (ignore-case t)
-    (sorted t)
-    (candidates (cons :async
-                      (lambda (callback)
-                        (company-tern-candidates-query arg callback))))))
-
 ;; fn(glob: store, opt: store) -> DestroyableTransform|fn(override: ?) -> Through2
 (defun company-tern---split-string-by-toplevel-comma (s)
   "Split string S by toplevel SEPARATORS.
@@ -262,8 +255,10 @@ Examples:
     (when (or company-tern--debug-print-enabled force)
       (message "[company-tern]: %s" (apply #'format format-string args)))))
 
-(defun company-tern--expand-snippet (candidate)
-  "Construct a template for yasnippet from CANDIDATE and expand it."
+(defun company-tern-expand-yasnippet (candidate)
+  "On insertion of CANDIDATE having a signiture, such as functions,
+its arguments will be inserted and expanded using yasnippet.
+Construct a template for yasnippet from CANDIDATE and expand it."
   (ignore-errors
     (let* ((type (get-text-property 0 'type candidate))
            (template nil)
@@ -313,13 +308,8 @@ Examples:
       (buffer-substring beg (1- (scan-lists (point) 1 0))))))
 
 ;;;###autoload
-(defun company-tern-with-yasnippet (command &optional arg &rest _args)
-  "Another tern backend for company-mode. This backend assumes that
-you have yasnippet installed and available on your environment.
-
-On inserting a candidate having a signiture, such as functions, its
-arguments will be inserted and expanded using yasnippet.
-
+(defun company-tern (command &optional arg &rest _args)
+  "Tern backend for company-mode.
 See `company-backends' for more info about COMMAND and ARG."
   (interactive (list 'interactive))
   (cl-case command
@@ -333,7 +323,7 @@ See `company-backends' for more info about COMMAND and ARG."
     (candidates (cons :async
                       (lambda (callback)
                         (company-tern-candidates-query arg callback))))
-    (post-completion (company-tern--expand-snippet arg))))
+    (post-completion (funcall company-tern-post-completion-function arg))))
 
 (provide 'company-tern)
 
