@@ -255,6 +255,11 @@ Examples:
     (when (or company-tern--debug-print-enabled force)
       (message "[company-tern]: %s" (apply #'format format-string args)))))
 
+(defun company-tern--toggle-debug ()
+  (interactive)
+  (setq company-tern--debug-print-enabled
+        (not company-tern--debug-print-enabled)))
+
 (defun company-tern-expand-yasnippet (candidate)
   "On insertion of CANDIDATE having a signiture, such as functions,
 its arguments will be inserted and expanded using yasnippet.
@@ -262,13 +267,13 @@ Construct a template for yasnippet from CANDIDATE and expand it."
   (ignore-errors
     (let* ((type (get-text-property 0 'type candidate))
            (template nil)
-           (ix 0))
+           (ix 1))
       (company-tern--debug-print "type=%s" type)
       (cond
        ((string-match "^fn(\\(.*\\))" type)
         (setq template
               (concat
-               "("
+               "${1:("
                (cl-reduce
                 (lambda (a b)
                   (concat a
@@ -278,7 +283,7 @@ Construct a template for yasnippet from CANDIDATE and expand it."
                               ;; template.  In this way, we can skip the rest of
                               ;; arguments with "C-d" when we do not need those
                               ;; optional arguments.
-                              (concat (if (zerop ix)
+                              (concat (if (= ix 1)
                                           ""
                                         (format "${%d:, }" (incf ix)))
                                       (format "${%d:%s}" (incf ix) b))
@@ -288,7 +293,7 @@ Construct a template for yasnippet from CANDIDATE and expand it."
                 (company-tern---split-string-by-toplevel-comma
                  (company-tern--extract-arguments type))
                 :initial-value "")
-               ")$0"))
+               ")}$0"))
         (company-tern--debug-print "template=%s" template)
         (yas-expand-snippet template))
        (t
